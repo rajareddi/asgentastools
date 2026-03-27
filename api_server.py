@@ -164,11 +164,6 @@ async def get_info():
         }
     }
 
-if __name__ == "__main__":
-    port = int(os.getenv("PORT", 8000))
-    host = os.getenv("HOST", "0.0.0.0")
-    
-    print(f"Starting Agent API Server on {host}:{port}")
 
 # ============================================================================
 # A2A (Agent-to-Agent) Communication Endpoints
@@ -318,9 +313,12 @@ async def clear_a2a_messages(agent: str = None, topic: str = None):
         )
 
 if __name__ == "__main__":
-    print(f"Starting Agent API Server on {host}:{port}")
-    print(f"Access API docs at http://{host}:{port}/docs")
-    print(f"Access ReDoc at http://{host}:{port}/redoc")
+    port = int(os.getenv("PORT", 8000))
+    host = os.getenv("HOST", "0.0.0.0")
+    
+    print(f"[*] Starting Agent API Server on {host}:{port}")
+    print(f"[*] Access API docs at http://{host}:{port}/docs")
+    print(f"[*] Access ReDoc at http://{host}:{port}/redoc")
     
     uvicorn.run(
         app,
@@ -328,4 +326,3 @@ if __name__ == "__main__":
         port=port,
         log_level="info"
     )
-
