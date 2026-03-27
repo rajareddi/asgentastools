@@ -267,10 +267,9 @@ python test_a2a_communication.py
 
 ## 📚 Documentation
 
-- **a2a_package/README.md** - Package overview
-- **A2A_COMMUNICATION.md** - Complete A2A guide
-- **A2A_QUICK_REFERENCE.md** - Quick reference
-- **test_a2a_communication.py** - Examples
+- **a2a_package/README.md** - Package overview and usage
+- **A2A_PACKAGE_SETUP.md** - Complete package setup (this file)
+- All old duplicate files removed (cleaned up)
 
 ## 🎁 What's Included
 
