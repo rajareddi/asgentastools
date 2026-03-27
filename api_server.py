@@ -37,6 +37,8 @@ set_default_openai_client(openrouter_client)
 # Import agents after setting up the client
 from agents_module.advanced_agent import advanced_orchestrator
 from agents_module.function_tools_agent import root_agent as function_tools_agent
+from a2a_package import coordinator_agent, specialist_agent, a2a_orchestrator
+from a2a_package.core import message_broker
 
 # Request/Response models
 class PromptRequest(BaseModel):
@@ -166,6 +168,156 @@ if __name__ == "__main__":
     port = int(os.getenv("PORT", 8000))
     host = os.getenv("HOST", "0.0.0.0")
     
+    print(f"Starting Agent API Server on {host}:{port}")
+
+# ============================================================================
+# A2A (Agent-to-Agent) Communication Endpoints
+# ============================================================================
+
+@app.post("/a2a/collaborate", response_model=PromptResponse)
+async def a2a_collaborate(request: PromptRequest):
+    """
+    Run A2A collaboration between Coordinator and Specialist agents
+    
+    Example prompt: "Discuss the implementation of microservices architecture"
+    """
+    try:
+        # Use A2A orchestrator
+        agent = a2a_orchestrator
+        
+        # Run the agent with collaboration prompt
+        result = await Runner.run(
+            agent,
+            input=request.prompt,
+            max_turns=request.max_turns
+        )
+        
+        return PromptResponse(
+            result=str(result.final_output),
+            agent_type="a2a_orchestrator",
+            prompt=request.prompt
+        )
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error running A2A collaboration: {str(e)}"
+        )
+
+@app.get("/a2a/messages", response_model=dict)
+async def get_a2a_messages(agent: str = None, topic: str = "general"):
+    """
+    Get message history between agents
+    
+    Args:
+        agent: Filter by agent name (Coordinator or Specialist)
+        topic: Filter by topic (default: "general")
+    
+    Returns:
+        List of messages in conversation history
+    """
+    try:
+        if agent:
+            messages = message_broker.get_messages(agent, topic)
+        else:
+            messages = message_broker.messages
+        
+        return {
+            "count": len(messages),
+            "messages": messages,
+            "topic": topic
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error retrieving messages: {str(e)}"
+        )
+
+@app.get("/a2a/conversation", response_model=dict)
+async def get_a2a_conversation(agent1: str = "Coordinator", agent2: str = "Specialist", topic: str = "general"):
+    """
+    Get conversation history between two agents
+    
+    Args:
+        agent1: First agent name (default: Coordinator)
+        agent2: Second agent name (default: Specialist)
+        topic: Topic filter (default: "general")
+    
+    Returns:
+        Full conversation transcript
+    """
+    try:
+        conversation = message_broker.get_conversation(agent1, agent2, topic)
+        
+        return {
+            "agent1": agent1,
+            "agent2": agent2,
+            "topic": topic,
+            "message_count": len(conversation),
+            "conversation": conversation
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error retrieving conversation: {str(e)}"
+        )
+
+@app.post("/a2a/send-message", response_model=dict)
+async def send_a2a_message(from_agent: str, to_agent: str, message: str, topic: str = "general"):
+    """
+    Send a message between agents directly
+    
+    Args:
+        from_agent: Sending agent (Coordinator or Specialist)
+        to_agent: Receiving agent
+        message: Message content
+        topic: Topic for the message
+    
+    Returns:
+        Message object with metadata
+    """
+    try:
+        msg = message_broker.send_message(from_agent, to_agent, message, topic)
+        return {
+            "success": True,
+            "message": msg,
+            "status": "Message sent successfully"
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error sending message: {str(e)}"
+        )
+
+@app.delete("/a2a/clear-messages", response_model=dict)
+async def clear_a2a_messages(agent: str = None, topic: str = None):
+    """
+    Clear A2A message history
+    
+    Args:
+        agent: Clear messages for specific agent (optional)
+        topic: Clear messages for specific topic (optional)
+    
+    Returns:
+        Confirmation of cleared messages
+    """
+    try:
+        message_broker.clear_messages(agent, topic)
+        return {
+            "success": True,
+            "message": "Messages cleared successfully",
+            "cleared_for": {
+                "agent": agent or "all",
+                "topic": topic or "all"
+            }
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error clearing messages: {str(e)}"
+        )
+
+if __name__ == "__main__":
     print(f"Starting Agent API Server on {host}:{port}")
     print(f"Access API docs at http://{host}:{port}/docs")
     print(f"Access ReDoc at http://{host}:{port}/redoc")
