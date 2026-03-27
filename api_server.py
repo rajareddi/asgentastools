@@ -58,9 +58,9 @@ class HealthResponse(BaseModel):
 # Lifespan manager
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    print("🚀 Agent API Server starting...")
+    print("[*] Agent API Server starting...")
     yield
-    print("🛑 Agent API Server shutting down...")
+    print("[*] Agent API Server shutting down...")
 
 # Create FastAPI app
 app = FastAPI(
