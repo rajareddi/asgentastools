@@ -7,3 +7,10 @@ uvicorn>=0.24.0
 requests>=2.31.0
 pydantic>=2.0.0
 
+# MCP (Model Context Protocol) Servers
+mcp>=0.1.0
+mcp-server-filesystem>=0.1.0
+mcp-server-git>=0.1.0
+mcp-server-web>=0.1.0
+mcp-server-sql>=0.1.0
+
