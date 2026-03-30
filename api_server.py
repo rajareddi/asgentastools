@@ -118,10 +118,10 @@ async def run_agent(request: PromptRequest):
         elif request.agent_type == "a2a_orchestrator":
             agent = a2a_orchestrator
         elif request.agent_type == "mcp":
-            if not mcp_available or mcp_agent is None:
+            if not mcp_agent_available or mcp_agent is None:
                 raise HTTPException(
                     status_code=503,
-                    detail="MCP agent not available. Install MCP dependencies."
+                    detail="MCP agent not available. Install agents framework."
                 )
             agent = mcp_agent
         else:

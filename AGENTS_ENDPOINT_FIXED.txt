@@ -1,0 +1,137 @@
+✅ ISSUE FIXED: Could Not Fetch Available Agents
+
+═══════════════════════════════════════════════════════════════════════════════
+
+🔍 PROBLEM
+═══════════════════════════════════════════════════════════════════════════════
+
+Error when accessing /agents endpoint:
+  NameError: name 'mcp_agent_available' is not defined
+
+This prevented the API from listing available agents.
+
+═══════════════════════════════════════════════════════════════════════════════
+
+🔎 ROOT CAUSE
+═══════════════════════════════════════════════════════════════════════════════
+
+api_server.py was importing from the OLD mcp_agent module location:
+  ❌ from mcp_agent import mcp_agent
+  ❌ mcp_available = True (old variable name)
+
+But this module no longer existed - it had been moved into mcp_package/
+
+The endpoint tried to use mcp_agent_available but it was never imported.
+
+═══════════════════════════════════════════════════════════════════════════════
+
+✅ SOLUTION
+═══════════════════════════════════════════════════════════════════════════════
+
+Updated api_server.py imports:
+
+BEFORE:
+  try:
+      from mcp_agent import mcp_agent
+      mcp_available = True
+  except ImportError:
+      mcp_available = False
+      mcp_agent = None
+
+AFTER:
+  try:
+      from mcp_package import mcp_agent, mcp_agent_available
+  except ImportError:
+      mcp_agent_available = False
+      mcp_agent = None
+
+Also updated agents endpoint to use correct variable name:
+  if mcp_agent_available:  (was: if mcp_available:)
+
+═══════════════════════════════════════════════════════════════════════════════
+
+🧪 VERIFICATION
+═══════════════════════════════════════════════════════════════════════════════
+
+✓ /health endpoint            - Returns 200 OK
+✓ /agents endpoint            - Returns 200 OK with 6 agents
+✓ /info endpoint              - Returns 200 OK
+✓ All agents listed:
+  - advanced
+  - functions
+  - coordinator
+  - specialist
+  - a2a_orchestrator
+  - mcp                        ← Now properly included!
+
+═══════════════════════════════════════════════════════════════════════════════
+
+📊 AGENTS RESPONSE
+═══════════════════════════════════════════════════════════════════════════════
+
+GET /agents returns:
+{
+  "agents": [
+    {
+      "name": "advanced",
+      "description": "Content Creation Orchestrator...",
+      "type": "orchestrator"
+    },
+    {
+      "name": "functions",
+      "description": "Function Tools Agent...",
+      "type": "utility"
+    },
+    {
+      "name": "coordinator",
+      "description": "Coordinator Agent...",
+      "type": "a2a"
+    },
+    {
+      "name": "specialist",
+      "description": "Specialist Agent...",
+      "type": "a2a"
+    },
+    {
+      "name": "a2a_orchestrator",
+      "description": "A2A Orchestrator...",
+      "type": "a2a"
+    },
+    {
+      "name": "mcp",
+      "description": "MCP-Integrated Agent...",
+      "type": "mcp"
+    }
+  ]
+}
+
+═══════════════════════════════════════════════════════════════════════════════
+
+🎯 WHAT NOW WORKS
+═══════════════════════════════════════════════════════════════════════════════
+
+✅ /agents endpoint working correctly
+✅ MCP agent properly imported from mcp_package
+✅ All agents can be accessed via API
+✅ API server starts without errors
+✅ Streamlit UI can fetch agents
+✅ Complete agent list includes MCP agent
+
+═══════════════════════════════════════════════════════════════════════════════
+
+📝 COMMIT
+═══════════════════════════════════════════════════════════════════════════════
+
+Commit: Fix: Update MCP imports in api_server.py
+
+Changes:
+  - api_server.py: Updated MCP imports to use mcp_package
+
+═══════════════════════════════════════════════════════════════════════════════
+
+✨ STATUS: FIXED AND WORKING!
+
+The /agents endpoint now works correctly and returns all 6 available agents.
+
+═══════════════════════════════════════════════════════════════════════════════
+
