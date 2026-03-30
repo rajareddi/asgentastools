@@ -40,6 +40,14 @@ from agents_module.function_tools_agent import root_agent as function_tools_agen
 from a2a_package import coordinator_agent, specialist_agent, a2a_orchestrator
 from a2a_package.core import message_broker
 
+# Import MCP agent
+try:
+    from mcp_agent import mcp_agent
+    mcp_available = True
+except ImportError:
+    mcp_available = False
+    mcp_agent = None
+
 # Request/Response models
 class PromptRequest(BaseModel):
     prompt: str
@@ -104,10 +112,23 @@ async def run_agent(request: PromptRequest):
             agent = advanced_orchestrator
         elif request.agent_type == "functions":
             agent = function_tools_agent
+        elif request.agent_type == "coordinator":
+            agent = coordinator_agent
+        elif request.agent_type == "specialist":
+            agent = specialist_agent
+        elif request.agent_type == "a2a_orchestrator":
+            agent = a2a_orchestrator
+        elif request.agent_type == "mcp":
+            if not mcp_available or mcp_agent is None:
+                raise HTTPException(
+                    status_code=503,
+                    detail="MCP agent not available. Install MCP dependencies."
+                )
+            agent = mcp_agent
         else:
             raise HTTPException(
                 status_code=400,
-                detail=f"Unknown agent type: {request.agent_type}. Use 'advanced' or 'functions'"
+                detail=f"Unknown agent type: {request.agent_type}. Available: advanced, functions, coordinator, specialist, a2a_orchestrator, mcp"
             )
         
         # Run the agent
@@ -132,20 +153,42 @@ async def run_agent(request: PromptRequest):
 @app.get("/agents", response_model=dict)
 async def list_agents():
     """List available agents"""
-    return {
-        "agents": [
-            {
-                "name": "advanced",
-                "description": "Content Creation Orchestrator - Coordinates research and writing",
-                "type": "orchestrator"
-            },
-            {
-                "name": "functions",
-                "description": "Function Tools Agent - Performs calculations and utilities",
-                "type": "utility"
-            }
-        ]
-    }
+    agents = [
+        {
+            "name": "advanced",
+            "description": "Content Creation Orchestrator - Coordinates research and writing",
+            "type": "orchestrator"
+        },
+        {
+            "name": "functions",
+            "description": "Function Tools Agent - Performs calculations and utilities",
+            "type": "utility"
+        },
+        {
+            "name": "coordinator",
+            "description": "Coordinator Agent - Manages agent-to-agent communication",
+            "type": "a2a"
+        },
+        {
+            "name": "specialist",
+            "description": "Specialist Agent - Provides specialized expertise",
+            "type": "a2a"
+        },
+        {
+            "name": "a2a_orchestrator",
+            "description": "A2A Orchestrator - Manages multi-agent workflows",
+            "type": "a2a"
+        }
+    ]
+    
+    if mcp_agent_available:
+        agents.append({
+            "name": "mcp",
+            "description": "MCP-Integrated Agent - Access external services via MCP",
+            "type": "mcp"
+        })
+    
+    return {"agents": agents}
 
 @app.get("/info", response_model=dict)
 async def get_info():
