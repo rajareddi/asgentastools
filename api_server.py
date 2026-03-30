@@ -40,12 +40,11 @@ from agents_module.function_tools_agent import root_agent as function_tools_agen
 from a2a_package import coordinator_agent, specialist_agent, a2a_orchestrator
 from a2a_package.core import message_broker
 
-# Import MCP agent
+# Import MCP agent from new package
 try:
-    from mcp_agent import mcp_agent
-    mcp_available = True
+    from mcp_package import mcp_agent, mcp_agent_available
 except ImportError:
-    mcp_available = False
+    mcp_agent_available = False
     mcp_agent = None
 
 # Request/Response models
