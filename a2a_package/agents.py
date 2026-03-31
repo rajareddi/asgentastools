@@ -6,6 +6,14 @@ Agent definitions for Agent-to-Agent communication
 from agents import Agent, Runner, function_tool
 from a2a_package.core import message_broker
 
+# Import OpenTelemetry for tracing
+try:
+    from otel_config import get_tracer, set_span_attributes, add_span_event
+    tracer = get_tracer(__name__)
+    TRACING_ENABLED = True
+except ImportError:
+    TRACING_ENABLED = False
+
 # ============================================================================
 # Agent 1: Coordinator Agent
 # ============================================================================
@@ -13,14 +21,67 @@ from a2a_package.core import message_broker
 @function_tool
 async def agent1_send_message(to_agent: str, message: str, topic: str = "general") -> str:
     """Send a message from Coordinator to another agent"""
+    if TRACING_ENABLED:
+        with tracer.start_as_current_span("tool.agent1_send_message") as span:
+            set_span_attributes({
+                "tool.name": "agent1_send_message",
+                "tool.type": "a2a_communication",
+                "tool.from_agent": "Coordinator",
+                "tool.to_agent": to_agent,
+                "tool.topic": topic,
+                "tool.message_length": len(message)
+            })
+            add_span_event("sending_message", {
+                "from": "Coordinator",
+                "to": to_agent,
+                "topic": topic
+            })
+            
+            msg = message_broker.send_message("Coordinator", to_agent, message, topic)
+            result = f"✓ Message sent to {to_agent} on topic '{topic}': {message}"
+            
+            set_span_attributes({
+                "tool.message_id": msg.get("id", "unknown"),
+                "tool.success": True
+            })
+            add_span_event("message_sent", {"message_id": msg.get("id")})
+            return result
+    
     msg = message_broker.send_message("Coordinator", to_agent, message, topic)
     return f"✓ Message sent to {to_agent} on topic '{topic}': {message}"
 
 @function_tool
 async def agent1_check_messages(topic: str = "general") -> str:
     """Check messages received by Coordinator agent"""
-    messages = message_broker.get_messages("Coordinator", topic)
+    if TRACING_ENABLED:
+        with tracer.start_as_current_span("tool.agent1_check_messages") as span:
+            set_span_attributes({
+                "tool.name": "agent1_check_messages",
+                "tool.type": "a2a_communication",
+                "tool.agent": "Coordinator",
+                "tool.topic": topic
+            })
+            add_span_event("checking_messages", {"topic": topic})
+            
+            messages = message_broker.get_messages("Coordinator", topic)
+            
+            set_span_attributes({
+                "tool.message_count": len(messages),
+                "tool.success": True
+            })
+            
+            if not messages:
+                add_span_event("no_messages_found")
+                return f"No messages for Coordinator on topic '{topic}'"
+            
+            msg_list = []
+            for msg in messages:
+                msg_list.append(f"From {msg['from']}: {msg['message']} (at {msg['timestamp']})")
+            
+            add_span_event("messages_retrieved", {"count": len(messages)})
+            return "\n".join(msg_list)
     
+    messages = message_broker.get_messages("Coordinator", topic)
     if not messages:
         return f"No messages for Coordinator on topic '{topic}'"
     
@@ -33,6 +94,37 @@ async def agent1_check_messages(topic: str = "general") -> str:
 @function_tool
 async def agent1_analyze_topic(topic: str) -> str:
     """Analyze a topic and provide insights"""
+    if TRACING_ENABLED:
+        with tracer.start_as_current_span("tool.agent1_analyze_topic") as span:
+            set_span_attributes({
+                "tool.name": "agent1_analyze_topic",
+                "tool.type": "analysis",
+                "tool.agent": "Coordinator",
+                "tool.input.topic": topic
+            })
+            add_span_event("analysis_start", {"topic": topic})
+            
+            analysis = f"""
+    Analysis of topic: {topic}
+    
+    Key considerations:
+    1. Scope and boundaries
+    2. Stakeholders involved
+    3. Potential challenges
+    4. Recommended approaches
+    5. Expected outcomes
+    
+    This analysis is shared with other agents for collaborative problem-solving.
+    """
+            result = analysis.strip()
+            
+            set_span_attributes({
+                "tool.output.length": len(result),
+                "tool.success": True
+            })
+            add_span_event("analysis_complete", {"output_length": len(result)})
+            return result
+    
     analysis = f"""
     Analysis of topic: {topic}
     
@@ -50,6 +142,38 @@ async def agent1_analyze_topic(topic: str) -> str:
 @function_tool
 async def agent1_get_conversation(other_agent: str, topic: str = "general") -> str:
     """Get conversation history with another agent"""
+    if TRACING_ENABLED:
+        with tracer.start_as_current_span("tool.agent1_get_conversation") as span:
+            set_span_attributes({
+                "tool.name": "agent1_get_conversation",
+                "tool.type": "a2a_communication",
+                "tool.agent1": "Coordinator",
+                "tool.agent2": other_agent,
+                "tool.topic": topic
+            })
+            add_span_event("retrieving_conversation", {
+                "between": f"Coordinator and {other_agent}",
+                "topic": topic
+            })
+            
+            conversation = message_broker.get_conversation("Coordinator", other_agent, topic)
+            
+            set_span_attributes({
+                "tool.conversation_length": len(conversation),
+                "tool.success": True
+            })
+            
+            if not conversation:
+                add_span_event("no_conversation_found")
+                return f"No conversation history with {other_agent} on topic '{topic}'"
+            
+            conv_text = f"Conversation between Coordinator and {other_agent} on '{topic}':\n\n"
+            for msg in conversation:
+                conv_text += f"[{msg['timestamp']}] {msg['from']} → {msg['to']}: {msg['message']}\n"
+            
+            add_span_event("conversation_retrieved", {"message_count": len(conversation)})
+            return conv_text
+    
     conversation = message_broker.get_conversation("Coordinator", other_agent, topic)
     
     if not conversation:
