@@ -1,0 +1,129 @@
+# OpenTelemetry Configuration for Python Agent Service
+# This configuration is equivalent to the Java Spring Boot declarative config
+# However, Python uses environment variables and programmatic configuration
+
+# Configuration Reference:
+# Based on OpenTelemetry Configuration Schema 1.0-rc.2
+# https://github.com/open-telemetry/opentelemetry-configuration
+
+# ============================================================================
+# RESOURCE CONFIGURATION
+# ============================================================================
+resource:
+  attributes:
+    - name: service.name
+      value: python-agent-service  # Maps to OTEL_SERVICE_NAME
+    - name: service.version
+      value: 1.0.0
+    - name: deployment.environment
+      value: development  # Maps to ENVIRONMENT env var
+
+# ============================================================================
+# PROPAGATOR CONFIGURATION
+# ============================================================================
+# Python SDK uses W3C Trace Context and Baggage by default
+propagator:
+  composite:
+    - tracecontext
+    - baggage
+
+# ============================================================================
+# TRACER PROVIDER CONFIGURATION
+# ============================================================================
+tracer_provider:
+  processors:
+    # OTLP HTTP Exporter to Opik Self-Hosted Server
+    - batch:
+        exporter:
+          otlp_http:
+            # Endpoint for traces
+            endpoint: ${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:http://localhost:5173/api/v1/private/otel/v1/traces}
+            
+            # Headers required by Opik
+            headers:
+              - name: Authorization
+                value: ${OPIK_AUTHORIZATION:}
+              - name: Comet-Workspace
+                value: ${OPIK_WORKSPACE:default}
+              - name: projectName
+                value: ${OPIK_PROJECT:agent-service}
+            
+            # Optional: Timeout configuration
+            timeout: 10  # seconds
+            
+            # Optional: Compression
+            compression: gzip
+
+    # Console Exporter for Debugging (optional)
+    # Enable with OTEL_CONSOLE_EXPORTER=true
+    - batch:
+        exporter:
+          console:
+            # Prints traces to console for debugging
+
+# ============================================================================
+# INSTRUMENTATION CONFIGURATION
+# ============================================================================
+instrumentation:
+  # Auto-instrumentation for FastAPI
+  fastapi:
+    enabled: true
+    capture_headers: true
+    
+  # Auto-instrumentation for HTTP requests
+  requests:
+    enabled: true
+    
+  # OpenAI instrumentation (if available)
+  openai:
+    enabled: true
+
+# ============================================================================
+# ENVIRONMENT VARIABLE MAPPING
+# ============================================================================
+# The Python implementation uses these environment variables:
+#
+# REQUIRED:
+# - OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: URL to Opik traces endpoint
+#
+# OPTIONAL:
+# - OPIK_AUTHORIZATION: Authorization token for Opik
+# - OPIK_WORKSPACE: Workspace name (default: default)
+# - OPIK_PROJECT: Project name (default: agent-service)
+# - OTEL_SERVICE_NAME: Service name (default: python-agent-service)
+# - OTEL_ENABLED: Enable/disable tracing (default: true)
+# - OTEL_CONSOLE_EXPORTER: Enable console output (default: false)
+# - ENVIRONMENT: Deployment environment (default: development)
+
+# ============================================================================
+# USAGE IN PYTHON
+# ============================================================================
+# The otel_config.py module implements this configuration programmatically:
+#
+# from otel_config import setup_telemetry, get_tracer
+#
+# # Setup telemetry (typically in app startup)
+# setup_telemetry(app)
+#
+# # Create spans in your code
+# tracer = get_tracer(__name__)
+# with tracer.start_as_current_span("my_operation") as span:
+#     span.set_attribute("key", "value")
+#     # Your code here
+#     span.add_event("operation_complete")
+
+# ============================================================================
+# COMPARISON WITH JAVA SPRING BOOT CONFIG
+# ============================================================================
+# Java (Spring Boot):
+#   - Uses spring.otel.file_format for declarative config
+#   - YAML configuration under "otel:" root node
+#   - Auto-configuration via Spring Boot auto-config
+#
+# Python (FastAPI):
+#   - Uses environment variables for configuration
+#   - Programmatic setup in otel_config.py
+#   - Manual instrumentation via OpenTelemetry SDK
+#
+# Both approaches achieve the same result: exporting traces to Opik
+

@@ -7,10 +7,13 @@ A complete web service for running AI agents with interactive prompts, accessibl
 - ✨ **Interactive Web UI** - Streamlit-based interface for easy agent interaction
 - 🔌 **REST API** - FastAPI backend with full documentation (Swagger/ReDoc)
 - 🤖 **Multiple Agents** - Advanced orchestrator + Function tools agents
+- 🤝 **Agent-to-Agent (A2A) Communication** - Agents collaborate to solve problems
+- 🔗 **MCP Integration** - Model Context Protocol for external service access
 - 🌐 **OpenRouter Integration** - Access multiple LLM models through OpenRouter
+- 📊 **OpenTelemetry Tracing** - Export traces to self-hosted Opik server
 - 🐳 **Docker Support** - Easy containerization and deployment
 - ☁️ **Cloud Ready** - Deploy to AWS, GCP, Azure, Heroku, etc.
-- 📊 **Production Grade** - Nginx reverse proxy, SSL, rate limiting
+- 🏗️ **Production Grade** - Nginx reverse proxy, SSL, rate limiting
 - 🔒 **Secure** - Environment-based API key management, HTTPS, non-root containers
 
 ## 🚀 Quick Start
@@ -174,11 +177,53 @@ python_workspaces/
 # Required
 OPENROUTER_API_KEY=your_api_key_here
 
-# Optional (defaults shown)
+# Optional Server Configuration (defaults shown)
 HOST=0.0.0.0
 PORT=8000
 PYTHONUNBUFFERED=1
+
+# Optional OpenTelemetry/Opik Tracing
+OTEL_ENABLED=true
+OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://localhost:5173/api/v1/private/otel/v1/traces
+OPIK_WORKSPACE=default
+OPIK_PROJECT=agent-service
+OTEL_SERVICE_NAME=python-agent-service
+OTEL_CONSOLE_EXPORTER=false  # Set to true for debugging
+ENVIRONMENT=development
 ```
+
+See `.env.example` for complete configuration options.
+
+## 📊 Monitoring & Observability
+
+### OpenTelemetry Integration
+
+The service includes built-in OpenTelemetry tracing that exports to self-hosted Opik servers:
+
+- **Automatic FastAPI instrumentation** - All HTTP requests traced
+- **Custom spans** - Agent execution, A2A communication tracked
+- **Error tracking** - Exceptions captured with context
+- **OTLP HTTP export** - Standard protocol compatible with Opik
+
+**Quick Setup:**
+
+1. Configure Opik endpoint in `.env`:
+   ```bash
+   OTEL_ENABLED=true
+   OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://localhost:5173/api/v1/private/otel/v1/traces
+   ```
+
+2. Start service:
+   ```bash
+   python api_server.py
+   ```
+
+3. View traces in Opik dashboard at `http://localhost:5173`
+
+**Documentation:**
+- `OPIK_TELEMETRY_GUIDE.md` - Comprehensive tracing guide
+- `OTEL_QUICKSTART.md` - Quick start guide
+- `test_otel_integration.py` - Integration test suite
 
 ### Nginx Configuration
 
@@ -265,12 +310,25 @@ This project is licensed under the MIT License - see LICENSE file for details.
 
 ## 🔗 Resources
 
+### External
 - **OpenRouter**: https://openrouter.ai/
 - **OpenAI Agents**: https://openai.github.io/openai-agents-python/
 - **FastAPI**: https://fastapi.tiangolo.com/
 - **Streamlit**: https://streamlit.io/
 - **Docker**: https://www.docker.com/
 - **Nginx**: https://nginx.org/
+- **OpenTelemetry**: https://opentelemetry.io/
+- **Opik**: https://www.comet.com/docs/opik/
+
+### Project Documentation
+- **DEPLOYMENT_GUIDE.md** - Complete deployment instructions
+- **A2A_PACKAGE_SETUP.md** - Agent-to-Agent communication setup
+- **MCP_INTEGRATION_GUIDE.md** - Model Context Protocol integration
+- **OPIK_TELEMETRY_GUIDE.md** - OpenTelemetry tracing guide
+- **OTEL_QUICKSTART.md** - Quick start for OpenTelemetry
+- **INTERVIEW_PREP.md** - Interview preparation guide
+- **ARCHITECTURE.md** - System architecture details
+- **ROADMAP.md** - Future development plans
 
 ## 📞 Support
 

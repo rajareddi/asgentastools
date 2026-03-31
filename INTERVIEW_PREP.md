@@ -34,6 +34,11 @@ The system uses OpenRouter API to access multiple AI models, and I've deployed i
 For the frontend:
 - Streamlit for the web interface
 
+For observability and monitoring:
+- OpenTelemetry for distributed tracing
+- Opik self-hosted server for trace visualization
+- OTLP HTTP exporter for trace export
+
 For deployment:
 - Docker and Docker Compose
 - Nginx as reverse proxy
@@ -261,6 +266,27 @@ For high traffic, we can add:
 
 These improvements would make the system more production-ready for enterprise use."
 
+### 16. "How do you monitor your application?"
+
+**Answer:**
+"I implemented comprehensive monitoring using OpenTelemetry and Opik:
+
+1. **Distributed Tracing** - OpenTelemetry SDK captures traces for every request
+
+2. **Automatic Instrumentation** - FastAPI endpoints are automatically instrumented, so every API call generates traces
+
+3. **Custom Spans** - I added custom spans for agent execution, A2A communication, and critical operations
+
+4. **Span Attributes** - Each trace includes metadata like agent type, prompt length, result length, success status
+
+5. **Event Tracking** - Events mark important checkpoints like agent_started, agent_completed, errors
+
+6. **OTLP Export** - Traces export to self-hosted Opik server via OTLP HTTP protocol
+
+7. **Visualization** - Opik dashboard shows request flow, timing, and errors
+
+This gives complete visibility into how agents execute and where bottlenecks occur. It's similar to the Java Spring Boot OpenTelemetry setup but implemented in Python."
+
 ---
 
 ## Technical Deep Dive Questions
@@ -317,6 +343,42 @@ Messages are currently stored in memory, but the design allows easy migration to
 
 **Example:**
 When an agent calls a tool, it uses await, so other requests can be processed while waiting for the tool to complete. This is especially important for API calls to OpenRouter."
+
+### Q: "Explain your OpenTelemetry implementation"
+
+**Answer:**
+"I implemented OpenTelemetry to export distributed traces to a self-hosted Opik server:
+
+**Architecture:**
+1. OpenTelemetry SDK installed in Python
+2. OTLP HTTP exporter sends traces to Opik
+3. FastAPI auto-instrumentation captures all HTTP requests
+4. Custom spans track agent execution details
+
+**Configuration:**
+- Environment variables control endpoint, workspace, project
+- Headers include Authorization, Comet-Workspace, projectName
+- Similar to Java Spring Boot declarative config but using Python SDK
+
+**Implementation:**
+```python
+# Setup in otel_config.py
+tracer_provider = TracerProvider(resource=resource)
+otlp_exporter = OTLPSpanExporter(endpoint, headers)
+tracer_provider.add_span_processor(BatchSpanProcessor(otlp_exporter))
+```
+
+**Spans created:**
+- HTTP request spans (automatic)
+- agent_execution spans (manual)
+- agent_runner spans (manual)
+- Error tracking with attributes
+
+**Benefits:**
+- Complete visibility into request flow
+- Performance bottleneck identification
+- Error tracking and debugging
+- Production-ready observability"
 
 ### Q: "How do you manage environment variables?"
 

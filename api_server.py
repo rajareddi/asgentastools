@@ -1,10 +1,11 @@
 """
 FastAPI server for the Agent framework
 Provides REST API endpoints for running agents with OpenRouter
+Includes OpenTelemetry tracing to Opik self-hosted server
 """
 
 import os
-import asyncio
+import logging
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
@@ -16,6 +17,19 @@ import uvicorn
 
 # Load environment variables
 load_dotenv()
+
+# Setup logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Import OpenTelemetry configuration
+from otel_config import (
+    setup_telemetry, 
+    shutdown_telemetry, 
+    get_tracer,
+    set_span_attributes,
+    add_span_event
+)
 
 # Configure OpenRouter
 openrouter_api_key = os.getenv('OPENROUTER_API_KEY')
@@ -65,9 +79,16 @@ class HealthResponse(BaseModel):
 # Lifespan manager
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    print("[*] Agent API Server starting...")
+    logger.info("[*] Agent API Server starting...")
+    
+    # Setup OpenTelemetry tracing
+    setup_telemetry(app)
+    
     yield
-    print("[*] Agent API Server shutting down...")
+    
+    # Shutdown telemetry on exit
+    logger.info("[*] Agent API Server shutting down...")
+    shutdown_telemetry()
 
 # Create FastAPI app
 app = FastAPI(
@@ -105,49 +126,103 @@ async def run_agent(request: PromptRequest):
     Returns:
         PromptResponse with the agent's result
     """
-    try:
-        # Select agent based on type
-        if request.agent_type == "advanced":
-            agent = advanced_orchestrator
-        elif request.agent_type == "functions":
-            agent = function_tools_agent
-        elif request.agent_type == "coordinator":
-            agent = coordinator_agent
-        elif request.agent_type == "specialist":
-            agent = specialist_agent
-        elif request.agent_type == "a2a_orchestrator":
-            agent = a2a_orchestrator
-        elif request.agent_type == "mcp":
-            if not mcp_agent_available or mcp_agent is None:
+    # Get tracer for creating spans
+    tracer = get_tracer(__name__)
+    
+    # Create main span for agent execution
+    with tracer.start_as_current_span("agent_execution") as span:
+        try:
+            # Add span attributes
+            set_span_attributes({
+                "agent.type": request.agent_type,
+                "agent.max_turns": request.max_turns,
+                "prompt.length": len(request.prompt),
+            })
+            
+            # Add event for agent selection
+            add_span_event("agent_selection_start", {
+                "agent_type": request.agent_type
+            })
+            
+            # Select agent based on type
+            if request.agent_type == "advanced":
+                agent = advanced_orchestrator
+            elif request.agent_type == "functions":
+                agent = function_tools_agent
+            elif request.agent_type == "coordinator":
+                agent = coordinator_agent
+            elif request.agent_type == "specialist":
+                agent = specialist_agent
+            elif request.agent_type == "a2a_orchestrator":
+                agent = a2a_orchestrator
+            elif request.agent_type == "mcp":
+                if not mcp_agent_available or mcp_agent is None:
+                    span.set_attribute("error", True)
+                    span.set_attribute("error.type", "mcp_unavailable")
+                    raise HTTPException(
+                        status_code=503,
+                        detail="MCP agent not available. Install agents framework."
+                    )
+                agent = mcp_agent
+            else:
+                span.set_attribute("error", True)
+                span.set_attribute("error.type", "invalid_agent_type")
                 raise HTTPException(
-                    status_code=503,
-                    detail="MCP agent not available. Install agents framework."
+                    status_code=400,
+                    detail=f"Unknown agent type: {request.agent_type}. Available: advanced, functions, coordinator, specialist, a2a_orchestrator, mcp"
                 )
-            agent = mcp_agent
-        else:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Unknown agent type: {request.agent_type}. Available: advanced, functions, coordinator, specialist, a2a_orchestrator, mcp"
+            
+            # Add event for agent execution start
+            add_span_event("agent_execution_start", {
+                "agent_name": agent.name if hasattr(agent, 'name') else 'unknown'
+            })
+            
+            # Run the agent
+            with tracer.start_as_current_span("agent_runner") as runner_span:
+                result = await Runner.run(
+                    agent,
+                    input=request.prompt,
+                    max_turns=request.max_turns
+                )
+                
+                runner_span.set_attribute("result.length", len(str(result.final_output)))
+            
+            # Add success event
+            add_span_event("agent_execution_complete", {
+                "success": True,
+                "output_length": len(str(result.final_output))
+            })
+            
+            span.set_attribute("success", True)
+            
+            return PromptResponse(
+                result=str(result.final_output),
+                agent_type=request.agent_type,
+                prompt=request.prompt
             )
         
-        # Run the agent
-        result = await Runner.run(
-            agent,
-            input=request.prompt,
-            max_turns=request.max_turns
-        )
+        except HTTPException as he:
+            # Record HTTP exception
+            span.set_attribute("error", True)
+            span.set_attribute("http.status_code", he.status_code)
+            add_span_event("error", {
+                "error.type": "HTTPException",
+                "error.message": he.detail
+            })
+            raise
         
-        return PromptResponse(
-            result=str(result.final_output),
-            agent_type=request.agent_type,
-            prompt=request.prompt
-        )
-    
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error running agent: {str(e)}"
-        )
+        except Exception as e:
+            # Record unexpected exception
+            span.set_attribute("error", True)
+            span.set_attribute("error.type", type(e).__name__)
+            add_span_event("error", {
+                "error.type": type(e).__name__,
+                "error.message": str(e)
+            })
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error running agent: {str(e)}"
+            )
 
 @app.get("/agents", response_model=dict)
 async def list_agents():
@@ -218,28 +293,53 @@ async def a2a_collaborate(request: PromptRequest):
     
     Example prompt: "Discuss the implementation of microservices architecture"
     """
-    try:
-        # Use A2A orchestrator
-        agent = a2a_orchestrator
-        
-        # Run the agent with collaboration prompt
-        result = await Runner.run(
-            agent,
-            input=request.prompt,
-            max_turns=request.max_turns
-        )
-        
-        return PromptResponse(
-            result=str(result.final_output),
-            agent_type="a2a_orchestrator",
-            prompt=request.prompt
-        )
+    tracer = get_tracer(__name__)
     
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error running A2A collaboration: {str(e)}"
-        )
+    with tracer.start_as_current_span("a2a_collaboration") as span:
+        try:
+            # Add span attributes
+            set_span_attributes({
+                "collaboration.type": "a2a_orchestrator",
+                "collaboration.max_turns": request.max_turns,
+                "prompt.length": len(request.prompt),
+            })
+            
+            # Use A2A orchestrator
+            agent = a2a_orchestrator
+            
+            add_span_event("a2a_execution_start")
+            
+            # Run the agent with collaboration prompt
+            result = await Runner.run(
+                agent,
+                input=request.prompt,
+                max_turns=request.max_turns
+            )
+            
+            add_span_event("a2a_execution_complete", {
+                "success": True,
+                "output_length": len(str(result.final_output))
+            })
+            
+            span.set_attribute("success", True)
+            
+            return PromptResponse(
+                result=str(result.final_output),
+                agent_type="a2a_orchestrator",
+                prompt=request.prompt
+            )
+        
+        except Exception as e:
+            span.set_attribute("error", True)
+            span.set_attribute("error.type", type(e).__name__)
+            add_span_event("error", {
+                "error.type": type(e).__name__,
+                "error.message": str(e)
+            })
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error running A2A collaboration: {str(e)}"
+            )
 
 @app.get("/a2a/messages", response_model=dict)
 async def get_a2a_messages(agent: str = None, topic: str = "general"):
